@@ -2,6 +2,7 @@ import theano
 
 import jax
 import jax.numpy as jnp
+import jax.scipy as jsp
 
 from warnings import warn
 from functools import update_wrapper, reduce
@@ -54,12 +55,26 @@ from theano.tensor.opt import MakeVector
 
 from theano.tensor.nnet.sigm import ScalarSoftplus
 
+from theano.tensor.nlinalg import (
+    ExtractDiag,
+)
 
+from theano.tensor.slinalg import (
+    Cholesky,
+    Solve,
+)
+
+from theano.tensor import AllocDiag
+
+jax.config.update("jax_enable_x64", True)
 # XXX: Enabling this will break some shape-based functionality, and severely
 # limit the types of graphs that can be converted.
 # See https://github.com/google/jax/blob/4d556837cc9003492f674c012689efc3d68fdf5f/design_notes/omnistaging.md
-jax.config.disable_omnistaging()
-jax.config.update("jax_enable_x64", True)
+# Older versions < 0.2.0 do not have this flag so we don't need to set it.
+try:
+    jax.config.disable_omnistaging()
+except AttributeError:
+    pass
 
 subtensor_ops = (Subtensor, AdvancedSubtensor1, BaseAdvancedSubtensor)
 incsubtensor_ops = (IncSubtensor, AdvancedIncSubtensor1, BaseAdvancedIncSubtensor)
@@ -626,3 +641,31 @@ def jax_funcify_Join(op):
             return jnp.concatenate(tensors, axis=axis)
 
     return join
+
+@jax_funcify.register(ExtractDiag)
+def jax_funcify_ExtractDiag(op):
+    def extract_diag(x):
+        return jnp.diagonal(x)
+
+    return extract_diag
+
+@jax_funcify.register(Cholesky)
+def jax_funcify_Cholesky(op):
+    def cholesky(a):
+        return jsp.linalg.cholesky(a)
+
+    return cholesky
+
+@jax_funcify.register(AllocDiag)
+def jax_funcify_AllocDiag(op):
+    def alloc_diag(x):
+        return jnp.diag(x)
+
+    return alloc_diag
+
+@jax_funcify.register(Solve)
+def jax_funcify_Solve(op):
+    def solve(a, b):
+        return jnp.linalg.solve(a, b)
+
+    return solve
